@@ -2,10 +2,12 @@ package flink.tutorial.wordcount.pojo;
 
 import flink.tutorial.wordcount.util.WordCountData;
 import org.apache.flink.api.common.functions.FlatMapFunction;
+import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.functions.ReduceFunction;
 import org.apache.flink.api.java.DataSet;
 import org.apache.flink.api.java.ExecutionEnvironment;
 import org.apache.flink.api.java.functions.KeySelector;
+import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.util.Collector;
 
 /**
@@ -68,16 +70,22 @@ public class WordCount {
         DataSet<String> text = getTextDataSet(env);
 
         DataSet<Word> counts =
-                // TODO: Implement a tokenizer that creates a Word POJO for each word
+                        // A tokenizer that creates a Word POJO for each word
                 text.flatMap(new Tokenizer())
-                        // TODO: implement a group by using a KeySelector that extracts the word as key
+                        // A group by using a KeySelector that extracts the word as key
                         .groupBy(new WordSelector())
-                                // TODO: implement a Reduce function working on the Word POJO
+                        // A Reduce function working on the Word POJO
                         .reduce(new WordReducer());
 
         // emit result
         if (fileOutput) {
-            counts.writeAsCsv(outputPath, "\n", " ");
+            DataSet<Tuple2<String, Integer>> toTuple = counts.map(new MapFunction<Word, Tuple2<String, Integer>>() {
+                @Override
+                public Tuple2<String, Integer> map(Word word) throws Exception {
+                    return new Tuple2<String, Integer>(word.word, word.count);
+                }
+            });
+            toTuple.writeAsCsv(outputPath, "\n", " ");
         } else {
             counts.print();
         }
@@ -117,8 +125,7 @@ public class WordCount {
     private static class WordSelector implements KeySelector<Word, String> {
         @Override
         public String getKey(Word value) throws Exception {
-            // TODO: your implementation here
-            return null;
+            return value.word;
         }
     }
 
@@ -129,8 +136,7 @@ public class WordCount {
 
         @Override
         public Word reduce(Word value1, Word value2) throws Exception {
-            // TODO: your implementation here
-            return null;
+            return new Word(value1.word, value1.count + value2.count);
         }
     }
 
