@@ -1,3 +1,21 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package flink.tutorial.clustering;
 
 import flink.tutorial.clustering.util.KMeansData;
@@ -16,24 +34,24 @@ import java.util.Collection;
 
 /**
  * This example implements a basic K-Means clustering algorithm.
- * <p/>
- * <p/>
+ *
+ * <p>
  * K-Means is an iterative clustering algorithm and works as follows:<br>
  * K-Means is given a set of data points to be clustered and an initial set of <i>K</i> cluster centers.
  * In each iteration, the algorithm computes the distance of each data point to each cluster center.
  * Each point is assigned to the cluster center which is closest to it.
  * Subsequently, each cluster center is moved to the center (<i>mean</i>) of all points that have been assigned to it.
- * The moved cluster centers are fed into the next iteration.
- * The algorithm terminates after a fixed number of iterations (as in this implementation)
+ * The moved cluster centers are fed into the next iteration. 
+ * The algorithm terminates after a fixed number of iterations (as in this implementation) 
  * or if cluster centers do not (significantly) move in an iteration.<br>
  * This is the Wikipedia entry for the <a href="http://en.wikipedia.org/wiki/K-means_clustering">K-Means Clustering algorithm</a>.
- * <p/>
- * <p/>
+ *
+ * <p>
  * This implementation works on two-dimensional data points. <br>
- * It computes an assignment of data points to cluster centers, i.e.,
+ * It computes an assignment of data points to cluster centers, i.e., 
  * each data point is annotated with the id of the final cluster (center) it belongs to.
- * <p/>
- * <p/>
+ *
+ * <p>
  * Input files are plain text files and must be formatted as follows:
  * <ul>
  * <li>Data points are represented as two double values separated by a blank character.
@@ -42,12 +60,12 @@ import java.util.Collection;
  * <li>Cluster centers are represented by an integer id and a point value.<br>
  * For example <code>"1 6.2 3.2\n2 2.9 5.7\n"</code> gives two centers (id=1, x=6.2, y=3.2) and (id=2, x=2.9, y=5.7).
  * </ul>
- * <p/>
- * <p/>
+ *
+ * <p>
  * Usage: <code>KMeans &lt;points path&gt; &lt;centers path&gt; &lt;result path&gt; &lt;num iterations&gt;</code><br>
- * If no parameters are provided, the program is run with default data from {@link KMeansData} and 10 iterations.
- * <p/>
- * <p/>
+ * If no parameters are provided, the program is run with default data from {@link flink.tutorial.clustering.util.KMeansData} and 10 iterations.
+ *
+ * <p>
  * This example shows how to use:
  * <ul>
  * <li>Bulk iterations
@@ -81,10 +99,10 @@ public class KMeans {
         DataSet<Centroid> newCentroids = points
                 // TODO: compute closest centroid for each point
                 .map(new SelectNearestCenter()).withBroadcastSet(loop, "centroids")
-                        // TODO: count and sum point coordinates for each centroid
+                // TODO: count and sum point coordinates for each centroid
                 .map(new CountAppender())
                 .groupBy(0).reduce(new CentroidAccumulator())
-                        // TODO: compute new centroids from point counts and coordinate sums
+                // TODO: compute new centroids from point counts and coordinate sums
                 .map(new CentroidAverager());
 
         // feed new centroids back into next iteration
@@ -96,7 +114,17 @@ public class KMeans {
 
         // emit result
         if (fileOutput) {
-            clusteredPoints.writeAsCsv(outputPath, "\n", " ");
+            if (centersOnly) {
+                DataSet<Tuple3<Integer, Double, Double>> toTuple = finalCentroids.map(new MapFunction<Centroid, Tuple3<Integer, Double, Double>>() {
+                    @Override
+                    public Tuple3<Integer, Double, Double> map(Centroid centroid) throws Exception {
+                        return new Tuple3<Integer, Double, Double>(centroid.id, centroid.x, centroid.y);
+                    }
+                });
+                toTuple.writeAsCsv(outputPath, "\n", "|");
+            } else {
+                clusteredPoints.writeAsCsv(outputPath, "\n", " ");
+            }
         } else {
             clusteredPoints.print();
         }
@@ -188,32 +216,24 @@ public class KMeans {
 
         @Override
         public Point map(Tuple2<Double, Double> t) throws Exception {
-            // TODO: your implementation here
-            return null;
+            return new Point(t.f0, t.f1);
         }
     }
 
-    /**
-     * Converts a Tuple3<Integer, Double,Double> into a Centroid.
-     */
+    /** Converts a Tuple3<Integer, Double,Double> into a Centroid. */
     public static final class TupleCentroidConverter implements MapFunction<Tuple3<Integer, Double, Double>, Centroid> {
 
         @Override
         public Centroid map(Tuple3<Integer, Double, Double> t) throws Exception {
-            // TODO: your implementation here
-            return null;
+            return new Centroid(t.f0, t.f1, t.f2);
         }
     }
 
-    /**
-     * Determines the closest cluster center for a data point.
-     */
+    /** Determines the closest cluster center for a data point. */
     public static final class SelectNearestCenter extends RichMapFunction<Point, Tuple2<Integer, Point>> {
         private Collection<Centroid> centroids;
 
-        /**
-         * Reads the centroid values from a broadcast variable into a collection.
-         */
+        /** Reads the centroid values from a broadcast variable into a collection. */
         @Override
         public void open(Configuration parameters) throws Exception {
             this.centroids = getRuntimeContext().getBroadcastVariable("centroids");
@@ -226,9 +246,7 @@ public class KMeans {
         }
     }
 
-    /**
-     * Appends a count variable to the tuple.
-     */
+    /** Appends a count variable to the tuple. */
     public static final class CountAppender implements MapFunction<Tuple2<Integer, Point>, Tuple3<Integer, Point, Long>> {
 
         @Override
@@ -238,9 +256,7 @@ public class KMeans {
         }
     }
 
-    /**
-     * Sums and counts point coordinates.
-     */
+    /** Sums and counts point coordinates. */
     public static final class CentroidAccumulator implements ReduceFunction<Tuple3<Integer, Point, Long>> {
 
         @Override
@@ -250,9 +266,7 @@ public class KMeans {
         }
     }
 
-    /**
-     * Computes new centroid from coordinate sum and count of points.
-     */
+    /** Computes new centroid from coordinate sum and count of points. */
     public static final class CentroidAverager implements MapFunction<Tuple3<Integer, Point, Long>, Centroid> {
 
         @Override
@@ -271,17 +285,19 @@ public class KMeans {
     private static String centersPath = null;
     private static String outputPath = null;
     private static int numIterations = 10;
+    private static boolean centersOnly = false;
 
     private static boolean parseParameters(String[] programArguments) {
 
         if (programArguments.length > 0) {
             // parse input arguments
             fileOutput = true;
-            if (programArguments.length == 4) {
+            if (programArguments.length >= 4) {
                 pointsPath = programArguments[0];
                 centersPath = programArguments[1];
                 outputPath = programArguments[2];
                 numIterations = Integer.parseInt(programArguments[3]);
+                centersOnly = (programArguments.length == 5) ? Boolean.parseBoolean(programArguments[4]) : false;
             } else {
                 System.err.println("Usage: KMeans <points path> <centers path> <result path> <num iterations>");
                 return false;
@@ -300,8 +316,8 @@ public class KMeans {
         if (fileOutput) {
             // read points from CSV file
             return env.readCsvFile(pointsPath)
-                    .fieldDelimiter(' ')
-                    .includeFields(true, true)
+                    .fieldDelimiter('|')
+                    .includeFields(false, true, true)
                     .types(Double.class, Double.class)
                     .map(new TuplePointConverter());
         } else {
@@ -312,7 +328,7 @@ public class KMeans {
     private static DataSet<Centroid> getCentroidDataSet(ExecutionEnvironment env) {
         if (fileOutput) {
             return env.readCsvFile(centersPath)
-                    .fieldDelimiter(' ')
+                    .fieldDelimiter('|')
                     .includeFields(true, true, true)
                     .types(Integer.class, Double.class, Double.class)
                     .map(new TupleCentroidConverter());
